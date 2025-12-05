@@ -349,7 +349,7 @@
 // }
 
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import FileTree from "./components/FileTree";
 import EditorPane from "./components/EditorPane";
@@ -369,6 +369,11 @@ export default function App() {
   const [isEditing, setIsEditing] = useState(false);
 
   const [runLogsProject, setRunLogsProject] = useState(null);
+
+  const wsGenerateRef = useRef(null);
+const [generationProgress, setGenerationProgress] = useState(0);
+const [eta, setEta] = useState(0);
+
 
   // -----------------------------
   // Load all projects
@@ -434,18 +439,57 @@ export default function App() {
   // -----------------------------
   // Create new project
   // -----------------------------
-  const createProject = async (name, idea) => {
-    setIsGenerating(true);
+const createProject = async (name, idea) => {
+  setIsGenerating(true);
+  setGenerationProgress(0);
+  setEta(0);
 
-    await api.generateProject({
-      project_name: name,
-      idea,
-    });
+  // 1️⃣ Open WebSocket to backend
+  wsGenerateRef.current = new WebSocket(
+    `ws://127.0.0.1:8000/ws/generate/${name}`
+  );
 
-    setIsGenerating(false);
-    await loadProjects();
-    setSelectedProject(name);
+  wsGenerateRef.current.onopen = () => {
+    console.log("WS Generate Connected");
   };
+
+  wsGenerateRef.current.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+
+      if (msg.event === "file_create") {
+        setSelectedFile({ path: msg.file });
+        setFileContent("");
+      }
+
+      if (msg.event === "editor_update") {
+        setSelectedFile({ path: msg.file });
+        setFileContent(msg.content);
+      }
+
+      if (msg.event === "progress") {
+        setGenerationProgress(msg.progress);
+      }
+
+      if (msg.event === "eta") {
+        setEta(msg.seconds);
+      }
+
+      if (msg.event === "finish") {
+        setGenerationProgress(100);
+        setIsGenerating(false);
+        loadProjects();
+        setSelectedProject(name);
+      }
+    } catch (e) {
+      console.error("WS parse error", e);
+    }
+  };
+
+  wsGenerateRef.current.onclose = () => {
+    console.log("WS closed");
+  };
+};
 
   // -----------------------------
   // Run Project (WebSocket + Terminal)
@@ -491,13 +535,27 @@ export default function App() {
 
       {/* EDITOR */}
       <EditorPane
-        selectedFile={selectedFile}
-        fileContent={fileContent}
-        setFileContent={setFileContent}
-        onAiEdit={aiEditFile}
-        isEditing={isEditing}
-        language={detectLanguage(selectedFile?.path)}
-      />
+  selectedFile={selectedFile}
+  setSelectedFile={setSelectedFile}
+  fileContent={fileContent}
+  setFileContent={setFileContent}
+
+  isGenerating={isGenerating}
+  setIsGenerating={setIsGenerating}
+
+  generationProgress={generationProgress}
+  setGenerationProgress={setGenerationProgress}
+
+  eta={eta}
+  setEta={setEta}
+
+  onAiEdit={aiEditFile}
+  isEditing={isEditing}
+  language={detectLanguage(selectedFile?.path)}
+
+  wsGenerateRef={wsGenerateRef}
+/>
+
 
       {/* TERMINAL LOGS */}
      {runLogsProject ? (

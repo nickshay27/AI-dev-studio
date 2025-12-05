@@ -16,8 +16,6 @@ from pathlib import Path
 import subprocess
 import asyncio
 import re
-import socket
-
 
 # internal imports
 from .workflows.generic_builder import run_generic_builder
@@ -29,7 +27,7 @@ from .tools.fs_tools import read_file
 # =============================================================================
 
 # Path to npm on your machine
-NPM_PATH = r"C:\Program Files\nodejs\npm.cmd"
+NPM_PATH = r"C:\Program Files\nodejs\npm.cmd"   # keep this as on your machine
 fixed_port = 3000
 
 router = APIRouter()
@@ -55,6 +53,7 @@ def run_project(data: dict):
     if not Path(NPM_PATH).exists():
         raise HTTPException(500, f"npm not found at: {NPM_PATH}")
 
+    # Frontend will open this URL in new tab
     return {"status": "ready", "url": f"http://127.0.0.1:{fixed_port}"}
 
 
@@ -92,7 +91,7 @@ async def health():
 
 
 # =============================================================================
-# PROJECT GENERATION
+# PROJECT GENERATION (HTTP)
 # =============================================================================
 
 class GenerateProjectRequest(BaseModel):
@@ -119,6 +118,108 @@ async def generate_project(payload: GenerateProjectRequest):
         plan=plan,
         created_files=created_files,
     )
+
+
+# =============================================================================
+# LIVE PROJECT GENERATION (SHOW TYPING + PROGRESS)
+#   /ws/generate/{project_name}
+#   → frontend uses this to show code typing in Monaco editor
+# =============================================================================
+
+@app.websocket("/ws/generate/{project_name}")
+async def generate_project_live(websocket: WebSocket, project_name: str):
+    await websocket.accept()
+
+    try:
+        await websocket.send_json({
+            "event": "start",
+            "message": f"🚀 Starting code generation for {project_name}...",
+            "progress": 0,
+        })
+
+        projects_root = Path(__file__).resolve().parents[1] / "projects"
+        project_root = projects_root / project_name / "frontend"
+        project_root.mkdir(parents=True, exist_ok=True)
+
+        # Example files we "type out" live
+        files_to_generate = {
+            "src/App.jsx": [
+                "export default function App() {",
+                "  return (",
+                "    <div style={{ padding: 30 }}>",
+                f"      <h1>🚀 AI Generated React App – {project_name}</h1>",
+                "      <p>Code is being generated live...</p>",
+                "    </div>",
+                "  );",
+                "}",
+            ],
+            "src/pages/Home.jsx": [
+                "export default function Home() {",
+                "  return <h2>🏠 Welcome Home!</h2>;",
+                "}",
+            ],
+            "src/services/api.js": [
+                "import axios from 'axios';",
+                "export default axios.create({ baseURL: 'http://127.0.0.1:8000' });",
+            ],
+        }
+
+        total = len(files_to_generate)
+        completed = 0
+
+        for file_path, lines in files_to_generate.items():
+            full = project_root / file_path
+            full.parent.mkdir(parents=True, exist_ok=True)
+
+            await websocket.send_json({
+                "event": "file_create",
+                "file": file_path,
+            })
+
+            written_lines = []
+
+            with open(full, "w", encoding="utf-8") as f:
+                for line in lines:
+                    f.write(line + "\n")
+                    written_lines.append(line)
+
+                    # send live update to editor
+                    await websocket.send_json({
+                        "event": "editor_update",
+                        "file": file_path,
+                        "content": "\n".join(written_lines),
+                    })
+
+                    # simulate typing
+                    await asyncio.sleep(0.12)
+
+            completed += 1
+            progress = int((completed / total) * 100)
+
+            await websocket.send_json({
+                "event": "progress",
+                "progress": progress,
+            })
+
+            await websocket.send_json({
+                "event": "eta",
+                "seconds": max(1, total - completed),
+            })
+
+        await websocket.send_json({
+            "event": "finish",
+            "progress": 100,
+            "message": "🎉 Project generation complete!",
+        })
+
+    except Exception as e:
+        await websocket.send_json({
+            "event": "error",
+            "message": str(e),
+        })
+
+    finally:
+        await websocket.close()
 
 
 # =============================================================================
@@ -161,6 +262,11 @@ async def get_project_tree(project_name: str):
     return {"tree": build_tree(project_dir)}
 
 
+# =============================================================================
+# FRONTEND BOILERPLATE (for /ws/logs)
+#   → NOW ALSO CREATES package.json IF MISSING (fixes npm ENOENT)
+# =============================================================================
+
 def ensure_frontend_boilerplate(frontend_path: Path, port: int = 3000):
     """Ensure required Vite React files exist for a new project."""
 
@@ -175,6 +281,7 @@ def ensure_frontend_boilerplate(frontend_path: Path, port: int = 3000):
     main_jsx = src_path / "main.jsx"
     app_jsx = src_path / "App.jsx"
     vite_config = frontend_path / "vite.config.mjs"
+    package_json = frontend_path / "package.json"
 
     # ----- index.html -----
     if not index_html.exists():
@@ -229,9 +336,31 @@ export default defineConfig({{
 }})
 """)
 
+    # ----- package.json (NEW: avoids npm ENOENT) -----
+    if not package_json.exists():
+        package_json.write_text(f"""{{
+  "name": "ai-project-frontend",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {{
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }},
+  "dependencies": {{
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  }},
+  "devDependencies": {{
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^5.0.0"
+  }}
+}}
+""")
+
 
 # =============================================================================
-# STREAM PROCESS LINES
+# STREAM PROCESS LINES (for Vite logs)
 # =============================================================================
 
 async def stream_process_lines(proc: subprocess.Popen, websocket: WebSocket, project_name: str):
@@ -245,7 +374,7 @@ async def stream_process_lines(proc: subprocess.Popen, websocket: WebSocket, pro
 
             await websocket.send_text(line)
 
-            # Detect actual Vite port from logs
+            # Detect actual Vite port from logs (even though we fix to 3000, this is safe)
             match = re.search(r"http://localhost:(\d+)", line)
             if match:
                 detected_port = match.group(1)
@@ -259,7 +388,7 @@ async def stream_process_lines(proc: subprocess.Popen, websocket: WebSocket, pro
 
 
 # =============================================================================
-# WEBSOCKET LOG HANDLER
+# WEBSOCKET LOG HANDLER (TERMINAL + VITE)
 # =============================================================================
 
 @app.websocket("/ws/logs/{project_name}")
@@ -269,13 +398,10 @@ async def project_logs_socket(websocket: WebSocket, project_name: str):
     projects_root = Path(__file__).resolve().parents[1] / "projects"
     project_root = projects_root / project_name / "frontend"
 
-    # ✔ Ensure frontend folder exists
+    # ✔ Ensure frontend folder exists + minimal vite app + package.json
     project_root.mkdir(parents=True, exist_ok=True)
-
-    # 🔥 Create index.html, main.jsx, App.jsx, vite.config.mjs
     ensure_frontend_boilerplate(project_root, fixed_port)
 
-    # Now folder exists for sure
     node_modules = project_root / "node_modules"
 
     try:
@@ -308,7 +434,7 @@ async def project_logs_socket(websocket: WebSocket, project_name: str):
 
         await websocket.send_text("[WAITING_FOR_VITE]\n")
 
-        # 3) Stream Vite logs to frontend
+        # 3) Stream Vite logs to frontend (Terminal)
         await stream_process_lines(dev_proc, websocket, project_name)
 
     except Exception as e:
@@ -316,7 +442,6 @@ async def project_logs_socket(websocket: WebSocket, project_name: str):
 
     finally:
         await websocket.close()
-
 
 
 # =============================================================================
@@ -351,5 +476,8 @@ async def edit_file(payload: EditFileRequest):
     return EditFileResponse(path=updated_path, content=read_file(updated_path))
 
 
+# =============================================================================
 # MOUNT ROUTER
+# =============================================================================
+
 app.include_router(router)

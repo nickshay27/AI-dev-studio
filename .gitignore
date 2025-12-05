@@ -1,3 +1,7 @@
+############################
+#       NODE.JS
+############################
+
 # Node modules
 node_modules/
 
@@ -9,30 +13,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage
-coverage/
-*.lcov
-
 # Build outputs
 dist/
 build/
 tmp/
 temp/
 
-# Environment variables
-.env
-.env.development
-.env.production
-.env.local
-.env.test
-
-# Cache
+# Caches
 .cache/
 .next/
 .nuxt/
@@ -41,20 +28,112 @@ vite-cache/
 storybook-static/
 .eslintcache
 
+# Environment variables
+.env
+.env.*
+.venv/
+
 # Typescript
 *.tsbuildinfo
 
-# IDE / Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Optional package managers
+# Optional package manager files
 .npm/
 .yarn/
 .pnpm-store/
+
+
+############################
+#        PYTHON
+############################
+
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+sdist/
+var/
+wheels/
+share/python-wheels/
+pip-wheel-metadata/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.pyenv/
+pipenv/
+.poetry/
+.venv/
+
+# Testing / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.pytest_cache/
+.hypothesis/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# PyCharm / VSCode
+.idea/
+.vscode/
+*.swp
+
+# MyPy / Pyright
+.mypy_cache/
+.dmypy.json
+.pyre/
+
+# Django
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Flask
+instance/
+.webassets-cache/
+
+# Sphinx docs
+docs/_build/
+
+# mkdocs
+/site/
+
+
+############################
+#       OS GENERAL
+############################
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Linux
+*~

@@ -15,22 +15,72 @@ export default function EditorPane({
   onAiEdit,
   isEditing,
   language,
+  wsGenerateRef,     // 👈 added (websocket reference from parent)
 }) {
   const [instruction, setInstruction] = useState("");
   const [typing, setTyping] = useState(false);
 
-  // ★ Live typing indicator
+  // ============================================================
+  // 🔥 HANDLE LIVE EVENTS FROM BACKEND WEBSOCKET
+  // ============================================================
   useEffect(() => {
-    if (!isGenerating) return;
-    setTyping(true);
+    if (!wsGenerateRef?.current) return;
 
-    const timeout = setTimeout(() => setTyping(false), 400);
-    return () => clearTimeout(timeout);
-  }, [fileContent]);
+    const ws = wsGenerateRef.current;
 
+    ws.onmessage = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      // ------------------ FILE CREATED ------------------
+      if (msg.event === "file_create") {
+        setSelectedFile({ path: msg.file });
+        setFileContent("");
+        setIsGenerating(true);
+        return;
+      }
+
+      // ------------------ LIVE CONTENT UPDATE ------------------
+      if (msg.event === "editor_update") {
+        setSelectedFile({ path: msg.file });
+        setFileContent(msg.content);
+        setTyping(true);
+        setTimeout(() => setTyping(false), 400);
+        return;
+      }
+
+      // ------------------ PROGRESS ------------------
+      if (msg.event === "progress") {
+        setGenerationProgress(msg.progress);
+        return;
+      }
+
+      // ------------------ ETA ------------------
+      if (msg.event === "eta") {
+        setEta(msg.seconds);
+        return;
+      }
+
+      // ------------------ FINISH ------------------
+      if (msg.event === "finish") {
+        setGenerationProgress(100);
+        setIsGenerating(false);
+        return;
+      }
+    };
+  }, [wsGenerateRef]);
+
+  // ============================================================
+  // UI RENDER
+  // ============================================================
   return (
     <div className="editor-pane">
-      {/* =================== HEADER =================== */}
+
+      {/* ================= HEADER ================= */}
       <div className="editor-header">
         <div>
           {selectedFile ? (
@@ -45,7 +95,7 @@ export default function EditorPane({
         <span className="gray small">Model: local ({language})</span>
       </div>
 
-      {/* =================== PROJECT GENERATION UI =================== */}
+      {/* ================= PROJECT GENERATION STATUS ================= */}
       {isGenerating && (
         <div className="generation-status">
           <div className="gen-row">
@@ -53,7 +103,7 @@ export default function EditorPane({
             {typing && <span className="typing-dot">●</span>}
           </div>
 
-          {/* Progress bar */}
+          {/* Progress Bar */}
           <div className="progress-bar">
             <div
               className="progress-fill"
@@ -67,7 +117,7 @@ export default function EditorPane({
         </div>
       )}
 
-      {/* =================== MONACO EDITOR =================== */}
+      {/* ================= MONACO EDITOR ================= */}
       <Editor
         height="100%"
         theme="vs-dark"
@@ -80,7 +130,7 @@ export default function EditorPane({
         }}
       />
 
-      {/* =================== AI EDIT BAR =================== */}
+      {/* ================= AI EDIT INPUT ================= */}
       <div className="editor-bottom">
         <textarea
           placeholder="AI instruction..."
