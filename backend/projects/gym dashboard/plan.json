@@ -1,0 +1,32 @@
+{
+  "project_name": "gym_dashboard",
+  "summary": "A user-friendly interface for managing a gym's operations.",
+  "tech_stack": [
+    "React",
+    "Redux",
+    "CSS Grid"
+  ],
+  "features": [
+    {
+      "id": 1,
+      "title": "Gym Membership Management",
+      "description": "Manage member subscriptions and billing.",
+      "priority": "low",
+      "area": "backend"
+    },
+    {
+      "id": 2,
+      "title": "Member Profile",
+      "description": "Display member information and create profiles.",
+      "priority": "medium",
+      "area": "frontend"
+    },
+    {
+      "id": 3,
+      "title": "Workout Library",
+      "description": "Create, edit, and delete workout classes.",
+      "priority": "high",
+      "area": "backend"
+    }
+  ]
+}

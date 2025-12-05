@@ -1,0 +1,39 @@
+{
+  "project_name": "simple dashboard",
+  "summary": "A simple Todo App Dashboard",
+  "tech_stack": [
+    "React",
+    "Redux",
+    "Node.js"
+  ],
+  "features": [
+    {
+      "id": 1,
+      "title": "Todo List",
+      "description": "A list of todo items to manage",
+      "priority": "high",
+      "area": "frontend"
+    },
+    {
+      "id": 2,
+      "title": "Search Bar",
+      "description": "A search input field for filtering todo items",
+      "priority": "medium",
+      "area": "frontend"
+    },
+    {
+      "id": 3,
+      "title": "Todo Item Details",
+      "description": "Detailed information about a single todo item",
+      "priority": "low",
+      "area": "frontend"
+    },
+    {
+      "id": 4,
+      "title": "Todo Item Delete",
+      "description": "A button to delete a todo item",
+      "priority": "high",
+      "area": "backend"
+    }
+  ]
+}

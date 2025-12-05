@@ -1,0 +1,32 @@
+{
+  "project_name": "simple Tv dashboard",
+  "summary": "A simple TV dashboard application that provides a user-friendly interface for accessing various TV-related information.",
+  "tech_stack": [
+    "React",
+    "Redux",
+    "React Router"
+  ],
+  "features": [
+    {
+      "id": 1,
+      "title": "User Profile Management",
+      "description": "Allow users to view and edit their profile information, including name, email, and password.",
+      "priority": "high",
+      "area": "frontend"
+    },
+    {
+      "id": 2,
+      "title": "Channel Selection",
+      "description": "Provide a list of available TV channels, allowing users to browse and select their favorite channels.",
+      "priority": "medium",
+      "area": "backend"
+    },
+    {
+      "id": 3,
+      "title": "Content Library",
+      "description": "Offer a collection of pre-loaded TV shows and movies, allowing users to search, play, and bookmark content.",
+      "priority": "low",
+      "area": "db"
+    }
+  ]
+}
