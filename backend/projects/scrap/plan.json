@@ -1,0 +1,32 @@
+{
+  "project_name": "scrap",
+  "summary": "Create a web scraper to extract email contact information from websites",
+  "tech_stack": [
+    "Puppeteer",
+    "Handlebars",
+    "Node.js"
+  ],
+  "features": [
+    {
+      "id": 1,
+      "title": "Extract Email Contact Information",
+      "description": "Use Puppeteer and Handlebars to scrape email contact information from popular websites",
+      "priority": "high",
+      "area": "frontend"
+    },
+    {
+      "id": 2,
+      "title": "Handle Special Characters and Spelling Mistakes",
+      "description": "Use regular expressions and escape characters to handle special characters and spelling mistakes in email addresses",
+      "priority": "medium",
+      "area": "backend"
+    },
+    {
+      "id": 3,
+      "title": "Improve User Experience with Error Handling",
+      "description": "Implement error handling mechanisms to improve user experience and prevent common errors such as invalid data formats",
+      "priority": "low",
+      "area": "infra"
+    }
+  ]
+}

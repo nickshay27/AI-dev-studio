@@ -6,22 +6,27 @@ export default function EditorPane({
   setSelectedFile,
   fileContent,
   setFileContent,
+
   isGenerating,
   setIsGenerating,
+
   generationProgress,
   setGenerationProgress,
+
   eta,
   setEta,
+
   onAiEdit,
   isEditing,
   language,
-  wsGenerateRef,     // 👈 added (websocket reference from parent)
+
+  wsGenerateRef, // WebSocket from parent
 }) {
   const [instruction, setInstruction] = useState("");
   const [typing, setTyping] = useState(false);
 
   // ============================================================
-  // 🔥 HANDLE LIVE EVENTS FROM BACKEND WEBSOCKET
+  // 🔥 HANDLE STREAMING EVENTS FROM BACKEND LLM
   // ============================================================
   useEffect(() => {
     if (!wsGenerateRef?.current) return;
@@ -36,7 +41,9 @@ export default function EditorPane({
         return;
       }
 
-      // ------------------ FILE CREATED ------------------
+      // -------------------------
+      // FILE CREATED
+      // -------------------------
       if (msg.event === "file_create") {
         setSelectedFile({ path: msg.file });
         setFileContent("");
@@ -44,28 +51,38 @@ export default function EditorPane({
         return;
       }
 
-      // ------------------ LIVE CONTENT UPDATE ------------------
+      // -------------------------
+      // LIVE CONTENT (TYPING)
+      // -------------------------
       if (msg.event === "editor_update") {
         setSelectedFile({ path: msg.file });
         setFileContent(msg.content);
+
         setTyping(true);
-        setTimeout(() => setTyping(false), 400);
+        setTimeout(() => setTyping(false), 250);
+
         return;
       }
 
-      // ------------------ PROGRESS ------------------
+      // -------------------------
+      // PROGRESS UPDATE
+      // -------------------------
       if (msg.event === "progress") {
         setGenerationProgress(msg.progress);
         return;
       }
 
-      // ------------------ ETA ------------------
+      // -------------------------
+      // ETA UPDATE
+      // -------------------------
       if (msg.event === "eta") {
         setEta(msg.seconds);
         return;
       }
 
-      // ------------------ FINISH ------------------
+      // -------------------------
+      // FINISHED
+      // -------------------------
       if (msg.event === "finish") {
         setGenerationProgress(100);
         setIsGenerating(false);
@@ -75,7 +92,7 @@ export default function EditorPane({
   }, [wsGenerateRef]);
 
   // ============================================================
-  // UI RENDER
+  // UI
   // ============================================================
   return (
     <div className="editor-pane">
@@ -95,9 +112,10 @@ export default function EditorPane({
         <span className="gray small">Model: local ({language})</span>
       </div>
 
-      {/* ================= PROJECT GENERATION STATUS ================= */}
+      {/* ================= GENERATION STATUS ================= */}
       {isGenerating && (
         <div className="generation-status">
+
           <div className="gen-row">
             <span>⚡ Generating project…</span>
             {typing && <span className="typing-dot">●</span>}
@@ -127,10 +145,12 @@ export default function EditorPane({
         options={{
           fontSize: 13,
           minimap: { enabled: false },
+          smoothScrolling: true,
+          scrollBeyondLastLine: false,
         }}
       />
 
-      {/* ================= AI EDIT INPUT ================= */}
+      {/* ================= AI EDIT AREA ================= */}
       <div className="editor-bottom">
         <textarea
           placeholder="AI instruction..."

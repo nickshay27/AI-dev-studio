@@ -126,73 +126,97 @@ async def generate_project(payload: GenerateProjectRequest):
 #   → frontend uses this to show code typing in Monaco editor
 # =============================================================================
 
+
 @app.websocket("/ws/generate/{project_name}")
 async def generate_project_live(websocket: WebSocket, project_name: str):
     await websocket.accept()
 
+    from .model_router import call_llm  # import LLM router
+    import json
+    import random
+
+    # Slow realistic typing
+    MIN_DELAY = 0.03
+    MAX_DELAY = 0.12
+    FILE_DELAY = 1.3
+
     try:
+        # announce start
         await websocket.send_json({
             "event": "start",
-            "message": f"🚀 Starting code generation for {project_name}...",
+            "message": f"🚀 Generating full project with LLM streaming…",
             "progress": 0,
         })
 
+        # Project directories
         projects_root = Path(__file__).resolve().parents[1] / "projects"
         project_root = projects_root / project_name / "frontend"
         project_root.mkdir(parents=True, exist_ok=True)
 
-        # Example files we "type out" live
+        # Read AI plan generated earlier
+        plan_path = projects_root / project_name / "plan.json"
+        if not plan_path.exists():
+            raise Exception("plan.json not found. Generate project first.")
+
+        plan = json.loads(plan_path.read_text())
+
+        # Extract features → convert to file targets
+        # AI can produce better mapping later
         files_to_generate = {
-            "src/App.jsx": [
-                "export default function App() {",
-                "  return (",
-                "    <div style={{ padding: 30 }}>",
-                f"      <h1>🚀 AI Generated React App – {project_name}</h1>",
-                "      <p>Code is being generated live...</p>",
-                "    </div>",
-                "  );",
-                "}",
-            ],
-            "src/pages/Home.jsx": [
-                "export default function Home() {",
-                "  return <h2>🏠 Welcome Home!</h2>;",
-                "}",
-            ],
-            "src/services/api.js": [
-                "import axios from 'axios';",
-                "export default axios.create({ baseURL: 'http://127.0.0.1:8000' });",
-            ],
+            "src/App.jsx": f"Create main React entry UI for project: {project_name}",
+            "src/pages/Home.jsx": f"Create simple homepage UI for project: {project_name}",
+            "src/services/api.js": "Create axios client service for project",
         }
 
         total = len(files_to_generate)
         completed = 0
 
-        for file_path, lines in files_to_generate.items():
+        # Loop through each file
+        for file_path, prompt_instruction in files_to_generate.items():
             full = project_root / file_path
             full.parent.mkdir(parents=True, exist_ok=True)
 
+            # Tell frontend that a file is being created
             await websocket.send_json({
                 "event": "file_create",
                 "file": file_path,
+                "message": f"✍️ Generating {file_path} using LLM...",
             })
 
-            written_lines = []
+            # -------------------------
+            # REQUEST STREAM FROM LLM
+            # -------------------------
+            messages = [
+                {"role": "system", "content": "You are an expert software engineer. Output ONLY raw code. No explanations."},
+                {"role": "user", "content": prompt_instruction},
+            ]
 
+            # Stream tokens from the model
+            token_stream = call_llm(messages, stream=True)
+
+            written = []
             with open(full, "w", encoding="utf-8") as f:
-                for line in lines:
-                    f.write(line + "\n")
-                    written_lines.append(line)
+                async for token in token_stream:  # ← LIVE token streaming
+                    token = token.replace("\r", "")
 
-                    # send live update to editor
-                    await websocket.send_json({
-                        "event": "editor_update",
-                        "file": file_path,
-                        "content": "\n".join(written_lines),
-                    })
+                    # physical writing
+                    f.write(token)
+                    written.append(token)
 
-                    # simulate typing
-                    await asyncio.sleep(0.12)
+                    # update editor LIVE
+                    try:
+                        await websocket.send_json({
+                            "event": "editor_update",
+                            "file": file_path,
+                            "content": "".join(written),
+                            "token": token,
+                        })
+                    except:
+                        return  # client closed
 
+                    await asyncio.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
+
+            # FILE COMPLETE
             completed += 1
             progress = int((completed / total) * 100)
 
@@ -206,20 +230,29 @@ async def generate_project_live(websocket: WebSocket, project_name: str):
                 "seconds": max(1, total - completed),
             })
 
+            await asyncio.sleep(FILE_DELAY)
+
+        # FINISH
         await websocket.send_json({
             "event": "finish",
+            "message": "🎉 Full LLM-based project generation complete!",
             "progress": 100,
-            "message": "🎉 Project generation complete!",
         })
 
     except Exception as e:
-        await websocket.send_json({
-            "event": "error",
-            "message": str(e),
-        })
+        try:
+            await websocket.send_json({
+                "event": "error",
+                "message": str(e),
+            })
+        except:
+            pass
 
     finally:
-        await websocket.close()
+        try:
+            await websocket.close()
+        except:
+            pass
 
 
 # =============================================================================

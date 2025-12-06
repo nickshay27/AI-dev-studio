@@ -1,0 +1,32 @@
+{
+  "project_name": "mobile_shop",
+  "summary": "Create a customizable mobile shop dashboard with user authentication and payment integration.",
+  "tech_stack": [
+    "react",
+    "nodejs",
+    "mongodb"
+  ],
+  "features": [
+    {
+      "id": 1,
+      "title": "User Profile Management",
+      "description": "Store customer information and allow users to edit their profiles.",
+      "priority": "high",
+      "area": "frontend"
+    },
+    {
+      "id": 2,
+      "title": "Product Catalogue",
+      "description": "Enable customers to browse products, add them to carts, and checkout.",
+      "priority": "medium",
+      "area": "frontend"
+    },
+    {
+      "id": 3,
+      "title": "Order Management",
+      "description": "Implement order tracking, payment processing, and order confirmation.",
+      "priority": "high",
+      "area": "backend"
+    }
+  ]
+}

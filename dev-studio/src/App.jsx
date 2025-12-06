@@ -349,6 +349,7 @@
 // }
 
 
+
 import { useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import FileTree from "./components/FileTree";
@@ -370,20 +371,18 @@ export default function App() {
 
   const [runLogsProject, setRunLogsProject] = useState(null);
 
+  // WebSocket reference for LLM live streaming
   const wsGenerateRef = useRef(null);
-const [generationProgress, setGenerationProgress] = useState(0);
-const [eta, setEta] = useState(0);
 
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [eta, setEta] = useState(0);
 
   // -----------------------------
   // Load all projects
   // -----------------------------
   const loadProjects = async () => {
     const res = await api.getProjects();
-
-    const list = Array.isArray(res.data)
-      ? res.data
-      : res.data.projects;
+    const list = Array.isArray(res.data) ? res.data : res.data.projects;
 
     setProjects(list || []);
 
@@ -408,23 +407,21 @@ const [eta, setEta] = useState(0);
   }, [selectedProject]);
 
   // -----------------------------
-  // Load file contents
+  // Load single file
   // -----------------------------
   const loadFile = async (node) => {
     if (node.type !== "file") return;
 
     setSelectedFile(node);
-
     const res = await api.getFile(node.path);
     setFileContent(res.data.content ?? "");
   };
 
   // -----------------------------
-  // AI Code Editing
+  // AI Editor
   // -----------------------------
   const aiEditFile = async (instruction) => {
     if (!selectedFile) return;
-
     setIsEditing(true);
 
     const res = await api.editFile({
@@ -437,131 +434,130 @@ const [eta, setEta] = useState(0);
   };
 
   // -----------------------------
-  // Create new project
+  // CREATE PROJECT (FULL streaming mode)
   // -----------------------------
-const createProject = async (name, idea) => {
-  setIsGenerating(true);
-  setGenerationProgress(0);
-  setEta(0);
+  const createProject = async (name, idea) => {
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setEta(0);
 
-  // 1️⃣ Open WebSocket to backend
-  wsGenerateRef.current = new WebSocket(
-    `ws://127.0.0.1:8000/ws/generate/${name}`
-  );
+    // step 1: create plan + project folder
+    await api.generateProject({ project_name: name, idea });
 
-  wsGenerateRef.current.onopen = () => {
-    console.log("WS Generate Connected");
-  };
+    // step 2: update UI
+    await loadProjects();
+    setSelectedProject(name);
 
-  wsGenerateRef.current.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
+    // step 3: OPEN STREAMING WEBSOCKET
+    const ws = new WebSocket(`ws://127.0.0.1:8000/ws/generate/${name}`);
+    wsGenerateRef.current = ws;
 
+    ws.onopen = () => console.log("LLM streaming connected");
+
+    // ⭐ SUPER IMPORTANT: attach WEB SOCKET STREAM HANDLERS HERE
+    ws.onmessage = (event) => {
+      let msg = null;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      // NEW FILE BEING CREATED
       if (msg.event === "file_create") {
         setSelectedFile({ path: msg.file });
         setFileContent("");
       }
 
+      // LIVE CONTENT TYPING
       if (msg.event === "editor_update") {
         setSelectedFile({ path: msg.file });
         setFileContent(msg.content);
       }
 
+      // UPDATE PROGRESS BAR
       if (msg.event === "progress") {
         setGenerationProgress(msg.progress);
       }
 
+      // ETA
       if (msg.event === "eta") {
         setEta(msg.seconds);
       }
 
+      // FINISH
       if (msg.event === "finish") {
         setGenerationProgress(100);
         setIsGenerating(false);
-        loadProjects();
-        setSelectedProject(name);
-      }
-    } catch (e) {
-      console.error("WS parse error", e);
-    }
-  };
 
-  wsGenerateRef.current.onclose = () => {
-    console.log("WS closed");
+        // reload file tree after backend finishes writing all files
+        setTimeout(() => {
+          loadProjects();
+          setSelectedProject(name);
+        }, 1000);
+      }
+    };
+
+    ws.onclose = () => console.log("Generation WebSocket closed");
   };
-};
 
   // -----------------------------
-  // Run Project (WebSocket + Terminal)
+  // RUN PROJECT (terminal panel)
   // -----------------------------
   const handleRunProject = async () => {
     if (!selectedProject) return;
-
-    // hit backend simple status endpoint
     await api.runProject(selectedProject);
-
-    // show terminal UI
     setRunLogsProject(selectedProject);
   };
 
   // -----------------------------
-  // Stop Project
+  // STOP PROJECT
   // -----------------------------
   const stopProject = async () => {
     if (!selectedProject) return;
     await api.stopProject(selectedProject);
   };
 
+  // -----------------------------
+  // UI RENDER
+  // -----------------------------
   return (
     <div className="app-shell">
 
-      {/* LEFT SIDEBAR */}
       <Sidebar
         projects={projects}
         selectedProject={selectedProject}
         setSelectedProject={setSelectedProject}
-        onRun={handleRunProject}   // ← FIXED
+        onRun={handleRunProject}
         onStop={stopProject}
         onCreateProject={createProject}
         isGenerating={isGenerating}
       />
 
-      {/* FILE TREE */}
       <FileTree
         tree={projectTree}
         selectedFile={selectedFile}
         onSelectFile={loadFile}
       />
 
-      {/* EDITOR */}
       <EditorPane
-  selectedFile={selectedFile}
-  setSelectedFile={setSelectedFile}
-  fileContent={fileContent}
-  setFileContent={setFileContent}
+        selectedFile={selectedFile}
+        setSelectedFile={setSelectedFile}
+        fileContent={fileContent}
+        setFileContent={setFileContent}
+        isGenerating={isGenerating}
+        setIsGenerating={setIsGenerating}
+        generationProgress={generationProgress}
+        setGenerationProgress={setGenerationProgress}
+        eta={eta}
+        setEta={setEta}
+        onAiEdit={aiEditFile}
+        isEditing={isEditing}
+        language={detectLanguage(selectedFile?.path)}
+        wsGenerateRef={wsGenerateRef}
+      />
 
-  isGenerating={isGenerating}
-  setIsGenerating={setIsGenerating}
-
-  generationProgress={generationProgress}
-  setGenerationProgress={setGenerationProgress}
-
-  eta={eta}
-  setEta={setEta}
-
-  onAiEdit={aiEditFile}
-  isEditing={isEditing}
-  language={detectLanguage(selectedFile?.path)}
-
-  wsGenerateRef={wsGenerateRef}
-/>
-
-
-      {/* TERMINAL LOGS */}
-     {runLogsProject ? (
-  <Terminal projectName={runLogsProject} />
-) : null}
-
+      {runLogsProject ? <Terminal projectName={runLogsProject} /> : null}
     </div>
   );
 }
